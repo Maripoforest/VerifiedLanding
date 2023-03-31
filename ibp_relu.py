@@ -2,22 +2,25 @@
 """
 Created on Wed Mar 22 22:34:09 2023
 
-@author: marip
+@author: Xiangmin
 """
 import torch
 import torch.nn as nn
 import copy
 
 class IBPModel(nn.Module):
-    def __init__(self, original_nn, alpha=0.5, testing=False):
+    def __init__(self, original_nn, alpha=0.5, testing=False, eps=0.1):
         super(IBPModel, self).__init__()
+        #enable testing for fixed w and b
         self.test = testing
-        self.nn = self.copynn(original_nn)
         self.alpha = alpha
+        self.epsilon = eps
+        self.copynn(original_nn)
 
     def copynn(self, original_nn):
         copied_layers = []
         for layer in original_nn:
+            # Copy the Linear feature of the layer
             if isinstance(layer, nn.Linear):
                 copied_layer = nn.Linear(layer.in_features, layer.out_features)
                 copied_layer.weight = nn.Parameter(copy.deepcopy(layer.weight))
@@ -28,19 +31,50 @@ class IBPModel(nn.Module):
                 copied_layer = copy.deepcopy(layer)
             copied_layers.append(copied_layer)
         self.copied_nn = nn.Sequential(*copied_layers)
-        return copied_layers
-
+        
     def forward(self, x):
         return self.copied_nn(x)
 
-    def compute_bounds(self, x_bounds):
-        l, u = x_bounds
-        for layer in self.nn:
-            if isinstance(layer, nn.Linear):
-                l, u = self.interval_bound_propagation(layer, l, u)
-            elif isinstance(layer, nn.ReLU):
-                l, u = self.relu_relaxaion_approximation(l, u)
-        return l, u
+    def compute_bounds(self, features):
+        if(len(features) == 1):
+            print(features.shape)
+            x_bounds = features[0]
+            l = torch.full_like(x_bounds, -self.epsilon) + x_bounds
+            u = torch.full_like(x_bounds, self.epsilon) + x_bounds
+            for layer in self.copied_nn:
+                
+                if isinstance(layer, nn.Linear):
+                    l, u = self.interval_bound_propagation(layer, l, u)
+                elif isinstance(layer, nn.ReLU):
+                    l, u = self.relu_relaxaion_approximation(l, u)
+
+            l = l.reshape(1, 64)
+            u = u.reshape(1, 64)
+            return l, u
+        else:
+            ls = []
+            us = []
+            for x_bounds in features:
+                print(features.shape)
+                print(x_bounds.shape)
+                l = torch.full_like(x_bounds, -self.epsilon) + x_bounds
+                u = torch.full_like(x_bounds, self.epsilon) + x_bounds
+                for layer in self.copied_nn:
+                    if isinstance(layer, nn.Linear):
+                        l, u = self.interval_bound_propagation(layer, l, u)
+                    elif isinstance(layer, nn.ReLU):
+                        l, u = self.relu_relaxaion_approximation(l, u)
+                    l = l.reshape(1, 64)
+                    u = u.reshape(1, 64)
+                ls.append(l)
+                us.append(u)
+
+            ls = torch.concatenate(ls, axis=0)
+            us = torch.concatenate(us, axis=0)
+            print(ls)
+            print(ls.shape)
+            return ls, us
+
 
     def interval_bound_propagation(self, layer, l, u):
         W, b = layer.weight, layer.bias
@@ -51,8 +85,8 @@ class IBPModel(nn.Module):
     def relu_relaxaion_approximation(self, l, u):
         slope = (u - l) / (self.alpha * (u - l) + (1 - self.alpha) * (l + u))
         bias = l - slope * l
-        u_out = slope * l + bias
-        l_out = slope * u + bias
+        l_out = slope * l + bias
+        u_out = slope * u + bias
         return l_out, u_out
     
     def initialize_parameters(self, layer):
@@ -76,16 +110,12 @@ class MyModel(nn.Module):
     def forward(self, x):
         return self.layers(x)
 
-mymodel = MyModel()
+if __name__ == "__main__":
+    mymodel = MyModel()
 
-# Define the IBP model
-model = IBPModel(original_nn=mymodel.layers, testing=True)
+    # Define the IBP model
+    model = IBPModel(original_nn=mymodel.layers, testing=1)
+    input_tensor = torch.tensor([0.5, 0.5])
+    l, u = model.compute_bounds(input_tensor)
 
-# Input bounds: lower and upper bounds for each input feature
-input_bounds = (torch.tensor([0.4, 0.4]), torch.tensor([0.6, 0.6]))
-
-# Compute output bounds using IBP
-output_bounds = model.compute_bounds(input_bounds)
-
-# Print the output bounds
-print("Output bounds:", output_bounds)
+    print("Output bounds:\n", l, u)

@@ -77,7 +77,7 @@ class CustomNetwork(nn.Module):
             nn.Linear(last_layer_dim_co, last_layer_dim_co), 
             nn.ReLU(),
         )
-        self.epsilon = 0.14
+        self.epsilon = 0.2
 
     def forward(self, features: th.Tensor) -> Tuple[th.Tensor, th.Tensor, th.Tensor]:
         """
@@ -106,9 +106,7 @@ class CustomNetwork(nn.Module):
     
         # l, u =  self.compute_bounds(features)
         # return l
-
-        # return self.value_net(features)
-        
+    
     def forward_cost(self, features: th.Tensor) -> th.Tensor:
         return self.cost_net(features)
 
@@ -155,6 +153,7 @@ class CustomNetwork(nn.Module):
 
     def interval_bound_propagation(self, layer, l, u):
         W, b = layer.weight, layer.bias
+        print(W)
         l_out = th.matmul(W.clamp(min=0), l) + th.matmul(W.clamp(max=0), u) + b
         u_out = th.matmul(W.clamp(min=0), u) + th.matmul(W.clamp(max=0), l) + b
         return l_out, u_out
@@ -198,38 +197,39 @@ class CustomActorCriticPolicy(ActorCriticPolicy):
 
 if __name__ == "__main__":
 
-    env = make_vec_env("LunarLander-v2", n_envs=1)
-    # model = PPO(ActorCriticPolicy, env, verbose=1,tensorboard_log="./tsb/ppo_LunarLander_tensorboard/")
-    model = PPO(CustomActorCriticPolicy, env, verbose=1,tensorboard_log="./tsb/ppo_LunarLander_tensorboard/")
-    for i in range(50):
-        model.learn(
-            total_timesteps=30000,
-            tb_log_name="nobound",
-            reset_num_timesteps=False
-            )
-        model.save("ppo_LunarLander_nobound_per14_timestep"+str(i*30000))
-    del model # remove to demonstrate saving and loading
-
     # env = make_vec_env("LunarLander-v2", n_envs=1)
-    # model = PPO.load("trained/ppo_LunarLander_noper")
-    # obs = env.reset()
-    # i = 0
-    # rewards = 0
-    # all_reward = []
+    # # model = PPO(ActorCriticPolicy, env, verbose=1,tensorboard_log="./tsb/ppo_LunarLander_tensorboard/")
+    # model = PPO(CustomActorCriticPolicy, env, verbose=1,tensorboard_log="./tsb/ppo_LunarLander_tensorboard/")
+    # for i in range(20):
+    #     model.learn(
+    #         total_timesteps=30000,
+    #         tb_log_name="nobound",
+    #         reset_num_timesteps=False
+    #         )
+    #     model.save("ppo_LunarLander_nobound_per_timestep"+str(i*30000))
+    # del model # remove to demonstrate saving and loading
 
-    # while i < 300:
-    #     # perturbations = np.random.uniform(-0.1, 0.1, obs.shape)
-    #     # # perturbations[0][6:] = 0
-    #     # obs += perturbations
-    #     action, _states = model.predict(obs)
-    #     obs, reward, dones, info = env.step(action)
-    #     rewards += reward[0]
-    #     if(dones):
-    #         i += 1
-    #         print("Run:", i)
-    #         print(rewards)
-    #         all_reward.append(rewards)
-    #         rewards = 0
-    #     env.render()
-    # with open('reward_no_per.pkl', 'wb') as f:
-    #     pickle.dump(all_reward, f)
+    env = make_vec_env("LunarLander-v2", n_envs=1)
+    model = PPO.load("trained/ppo_LunarLander_bound_per12")
+    obs = env.reset()
+    i = 0
+    rewards = 0
+    all_reward = []
+
+
+    while i < 300:
+        perturbations = np.random.uniform(-0.12, 0.12, obs.shape)
+        perturbations[0][6:] = 0
+        obs += perturbations
+        action, _states = model.predict(obs)
+        obs, reward, dones, info = env.step(action)
+        rewards += reward[0]
+        if(dones):
+            i += 1
+            print("Run:", i)
+            print(rewards)
+            all_reward.append(rewards)
+            rewards = 0
+        env.render()
+    with open('reward_per_bou_12_12.pkl', 'wb') as f:
+        pickle.dump(all_reward, f)
