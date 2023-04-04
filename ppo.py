@@ -77,7 +77,7 @@ class CustomNetwork(nn.Module):
             nn.Linear(last_layer_dim_co, last_layer_dim_co), 
             nn.ReLU(),
         )
-        self.epsilon = 0.14
+        self.epsilon = 0.16
 
     def forward(self, features: th.Tensor) -> Tuple[th.Tensor, th.Tensor, th.Tensor]:
         """
@@ -99,13 +99,13 @@ class CustomNetwork(nn.Module):
 
     def forward_critic(self, features: th.Tensor) -> th.Tensor:
         
-        perturbations = (th.rand_like(features) - 0.5) * 2 * self.epsilon
-        perturbations[:][6:] = 0
-        perturbations += features
-        return self.value_net(perturbations)
+        # perturbations = (th.rand_like(features) - 0.5) * 2 * self.epsilon
+        # perturbations[:][6:] = 0
+        # perturbations += features
+        # return self.value_net(perturbations)
     
-        # l, u =  self.compute_bounds(features)
-        # return l
+        l, u =  self.compute_bounds(features)
+        return l
 
         # return self.value_net(features)
         
@@ -113,8 +113,26 @@ class CustomNetwork(nn.Module):
         return self.cost_net(features)
 
     def compute_bounds(self, features):
-        if(len(features) == 1):
-            x_bounds = features[0]
+        # if(len(features) == 1):
+        #     x_bounds = features[0]
+        #     l = th.full_like(x_bounds, -self.epsilon)
+        #     l[6:] = 0
+        #     u = th.full_like(x_bounds, self.epsilon)
+        #     u[6:] = 0
+        #     l += x_bounds
+        #     u += x_bounds
+        #     for layer in self.value_net:
+        #         if isinstance(layer, nn.Linear):
+        #             l, u = self.interval_bound_propagation(layer, l, u)
+        #         elif isinstance(layer, nn.ReLU):
+        #             # l, u = self.relu_relaxaion_approximation(l, u)
+        #             l = self.relu(l)
+        #             u = self.relu(u)
+        #     return l, u
+        # else:
+        ls = []
+        us = []
+        for x_bounds in features:
             l = th.full_like(x_bounds, -self.epsilon)
             l[6:] = 0
             u = th.full_like(x_bounds, self.epsilon)
@@ -128,30 +146,12 @@ class CustomNetwork(nn.Module):
                     # l, u = self.relu_relaxaion_approximation(l, u)
                     l = self.relu(l)
                     u = self.relu(u)
-            return l, u
-        else:
-            ls = []
-            us = []
-            for x_bounds in features:
-                l = th.full_like(x_bounds, -self.epsilon)
-                l[6:] = 0
-                u = th.full_like(x_bounds, self.epsilon)
-                u[6:] = 0
-                l += x_bounds
-                u += x_bounds
-                for layer in self.value_net:
-                    if isinstance(layer, nn.Linear):
-                        l, u = self.interval_bound_propagation(layer, l, u)
-                    elif isinstance(layer, nn.ReLU):
-                        # l, u = self.relu_relaxaion_approximation(l, u)
-                        l = self.relu(l)
-                        u = self.relu(u)
-                ls.append(l)
-                us.append(u)
-            ls = th.stack(ls, dim=0)
-            us = th.concatenate(us, axis=0)
+            ls.append(l)
+            us.append(u)
+        ls = th.stack(ls, dim=0)
+        us = th.stack(us, dim=0)
 
-            return ls, us
+        return ls, us
 
     def interval_bound_propagation(self, layer, l, u):
         W, b = layer.weight, layer.bias
@@ -201,13 +201,15 @@ if __name__ == "__main__":
     env = make_vec_env("LunarLander-v2", n_envs=1)
     # model = PPO(ActorCriticPolicy, env, verbose=1,tensorboard_log="./tsb/ppo_LunarLander_tensorboard/")
     model = PPO(CustomActorCriticPolicy, env, verbose=1,tensorboard_log="./tsb/ppo_LunarLander_tensorboard/")
-    for i in range(50):
+
+
+    for i in range(100):
         model.learn(
             total_timesteps=30000,
             tb_log_name="nobound",
             reset_num_timesteps=False
             )
-        model.save("ppo_LunarLander_nobound_per14_timestep"+str(i*30000))
+        model.save("ppo_LunarLander_nobound_per23_timestep"+str(i*30000))
     del model # remove to demonstrate saving and loading
 
     # env = make_vec_env("LunarLander-v2", n_envs=1)

@@ -210,15 +210,17 @@ if __name__ == "__main__":
     # del model # remove to demonstrate saving and loading
 
     env = make_vec_env("LunarLander-v2", n_envs=1)
-    model = PPO.load("trained/ppo_LunarLander_bound_per12")
+    # model = PPO.load("trained/ppo_LunarLander_bound_per14")
+    model = PPO.load("trained/ppo_LunarLander_bound_per23_v2")
+
     obs = env.reset()
     i = 0
     rewards = 0
     all_reward = []
 
 
-    while i < 300:
-        perturbations = np.random.uniform(-0.2, 0.2, obs.shape)
+    while i < 100:
+        perturbations = np.random.uniform(-0.23, 0.23, obs.shape)
         perturbations[0][6:] = 0
         obs += perturbations
         action, _states = model.predict(obs)
@@ -231,5 +233,5 @@ if __name__ == "__main__":
             all_reward.append(rewards)
             rewards = 0
         env.render()
-    with open('reward_per_bou_12_2.pkl', 'wb') as f:
+    with open('reward/reward_per_bou_23_v2.pkl', 'wb') as f:
         pickle.dump(all_reward, f)
