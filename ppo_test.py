@@ -2,7 +2,7 @@
 """
 Created on Wed Dec 14 21:49:49 2022
 
-@author: 29134
+@author: Xiangmin
 """
 
 from typing import Callable, Dict, List, Optional, Tuple, Type, Union
@@ -19,219 +19,74 @@ from stable_baselines3.common.env_util import make_vec_env
 
 from ibp_relu import IBPModel
 
-# def discount(lst, gamma=0.99):
-#     n = len(lst)
-#     discounts = np.array([gamma**i for i in range(n)])
-#     longterm = np.zeros(n)
-#     for t in range(n):
-#         longterm[t] = lst[t] * discounts[n-t-1]
-#     return np.sum(longterm)
-
-
-class CustomNetwork(nn.Module):
-    """
-    Custom network for policy and value function.
-    It receives as input the features extracted by the feature extractor.
-
-    :param feature_dim: dimension of the features extracted with the features_extractor (e.g. features from a CNN)
-    :param last_layer_dim_pi: (int) number of units for the last layer of the policy network
-    :param last_layer_dim_vf: (int) number of units for the last layer of the value network
-    """
-
-    def __init__(
-        self,
-        feature_dim: int,
-        last_layer_dim_pi: int = 64,
-        last_layer_dim_vf: int = 64,
-        last_layer_dim_co: int = 64,
-    ):
-        super().__init__()
-        # IMPORTANT:
-        # Save output dimensions, used to create the distributions
-        self.latent_dim_pi = last_layer_dim_pi
-        self.latent_dim_vf = last_layer_dim_vf
-        self.latent_dim_co = last_layer_dim_co
-
-        self.relu = nn.ReLU()
-        self.flatten = nn.Flatten()
-
-        # Policy network
-        self.policy_net = nn.Sequential(
-            nn.Linear(feature_dim, last_layer_dim_pi), 
-            nn.ReLU(), 
-            nn.Linear(last_layer_dim_pi, last_layer_dim_pi),
-            nn.ReLU()
-        )
-        # Value network
-        self.value_net = nn.Sequential(
-            nn.Linear(feature_dim, last_layer_dim_vf), 
-            nn.ReLU(),
-            nn.Linear(last_layer_dim_vf, last_layer_dim_vf), 
-            nn.ReLU(),
-            nn.Linear(last_layer_dim_vf, 1)
-        )
-        # Cost network
-        self.cost_net = nn.Sequential(
-            nn.Linear(feature_dim, last_layer_dim_co), 
-            nn.ReLU(),
-            nn.Linear(last_layer_dim_co, last_layer_dim_co), 
-            nn.ReLU(),
-        )
-        self.epsilon = 0.2
-
-    def forward(self, features: th.Tensor) -> Tuple[th.Tensor, th.Tensor, th.Tensor]:
-        """
-        :return: (th.Tensor, th.Tensor) latent_policy, latent_value of the specified network.
-            If all layers are shared, then ``latent_policy == latent_value``
-        """
-        
-        # return self.forward_actor(features), self.forward_critic(features), self.forward_cost(features)
-        return self.forward_actor(features), self.forward_critic(features)
-
-    def forward_actor(self, features: th.Tensor) -> th.Tensor:
-        
-        perturbations = (th.rand_like(features) - 0.5) * 2 * self.epsilon
-        perturbations[:][6:] = 0
-        perturbations += features
-        return self.policy_net(perturbations)
-    
-        # return self.policy_net(features)
-
-    def forward_critic(self, features: th.Tensor) -> th.Tensor:
-        
-        perturbations = (th.rand_like(features) - 0.5) * 2 * self.epsilon
-        perturbations[:][6:] = 0
-        perturbations += features
-        return self.value_net(perturbations)
-    
-        # l, u =  self.compute_bounds(features)
-        # return l
-    
-    def forward_cost(self, features: th.Tensor) -> th.Tensor:
-        return self.cost_net(features)
-
-    def compute_bounds(self, features):
-        if(len(features) == 1):
-            x_bounds = features[0]
-            l = th.full_like(x_bounds, -self.epsilon)
-            l[6:] = 0
-            u = th.full_like(x_bounds, self.epsilon)
-            u[6:] = 0
-            l += x_bounds
-            u += x_bounds
-            for layer in self.value_net:
-                if isinstance(layer, nn.Linear):
-                    l, u = self.interval_bound_propagation(layer, l, u)
-                elif isinstance(layer, nn.ReLU):
-                    # l, u = self.relu_relaxaion_approximation(l, u)
-                    l = self.relu(l)
-                    u = self.relu(u)
-            return l, u
-        else:
-            ls = []
-            us = []
-            for x_bounds in features:
-                l = th.full_like(x_bounds, -self.epsilon)
-                l[6:] = 0
-                u = th.full_like(x_bounds, self.epsilon)
-                u[6:] = 0
-                l += x_bounds
-                u += x_bounds
-                for layer in self.value_net:
-                    if isinstance(layer, nn.Linear):
-                        l, u = self.interval_bound_propagation(layer, l, u)
-                    elif isinstance(layer, nn.ReLU):
-                        # l, u = self.relu_relaxaion_approximation(l, u)
-                        l = self.relu(l)
-                        u = self.relu(u)
-                ls.append(l)
-                us.append(u)
-            ls = th.stack(ls, dim=0)
-            us = th.concatenate(us, axis=0)
-
-            return ls, us
-
-    def interval_bound_propagation(self, layer, l, u):
-        W, b = layer.weight, layer.bias
-        print(W)
-        l_out = th.matmul(W.clamp(min=0), l) + th.matmul(W.clamp(max=0), u) + b
-        u_out = th.matmul(W.clamp(min=0), u) + th.matmul(W.clamp(max=0), l) + b
-        return l_out, u_out
-    
-    def relu_relaxaion_approximation(self, l, u, alpha=0.5):
-        slope = (u - l) / (alpha * (u - l) + (1 - alpha) * (l + u))
-        bias = l - slope * l
-        l_out = slope * l + bias
-        u_out = slope * u + bias
-        return l_out, u_out
-
-class CustomActorCriticPolicy(ActorCriticPolicy):
-    def __init__(
-        self,
-        observation_space: gym.spaces.Space,
-        action_space: gym.spaces.Space,
-        lr_schedule: Callable[[float], float],
-        net_arch: Optional[List[Union[int, Dict[str, List[int]]]]] = None,
-        activation_fn: Type[nn.Module] = nn.ReLU,
-        *args,
-        **kwargs,
-    ):
-
-        super(CustomActorCriticPolicy, self).__init__(
-            observation_space,
-            action_space,
-            lr_schedule,
-            net_arch,
-            activation_fn,
-            # Pass remaining arguments to base class
-            *args,
-            **kwargs,
-        )
-        # Disable orthogonal initialization
-        self.ortho_init = False
-
-    def _build_mlp_extractor(self) -> None:
-        self.mlp_extractor = CustomNetwork(self.features_dim)
-
+def discount(lst, gamma=0.99):
+    n = len(lst)
+    discounts = np.array([gamma**i for i in range(n)])
+    longterm = np.zeros(n)
+    for t in range(n):
+        longterm[t] = lst[t] * discounts[n-t-1]
+    return np.sum(longterm)
 
 
 if __name__ == "__main__":
+    
+    eps = 16
+    bound = True
+    per = True
+    sec = False
 
-    # env = make_vec_env("LunarLander-v2", n_envs=1)
-    # # model = PPO(ActorCriticPolicy, env, verbose=1,tensorboard_log="./tsb/ppo_LunarLander_tensorboard/")
-    # model = PPO(CustomActorCriticPolicy, env, verbose=1,tensorboard_log="./tsb/ppo_LunarLander_tensorboard/")
-    # for i in range(20):
-    #     model.learn(
-    #         total_timesteps=30000,
-    #         tb_log_name="nobound",
-    #         reset_num_timesteps=False
-    #         )
-    #     model.save("ppo_LunarLander_nobound_per_timestep"+str(i*30000))
-    # del model # remove to demonstrate saving and loading
+    if per:
+        if bound:
+            modelname = "trained/ppo_LunarLander_bound_per" + str(eps)
+            rewardname = "reward/reward_per_bou_" + str(eps)
+            speedname = "reward/speed_per_bou_" + str(eps)
+        else:
+            modelname = "trained/ppo_LunarLander_nobound_per" + str(eps)
+            rewardname = "reward/reward_per_nobou_" + str(eps)
+            speedname = "reward/speed_per_nobou_" + str(eps)
+    if sec:
+        modelname += "_v2"
+        rewardname += "_v2"
+        speedname += "_v2"
 
     env = make_vec_env("LunarLander-v2", n_envs=1)
-    # model = PPO.load("trained/ppo_LunarLander_bound_per14")
-    model = PPO.load("trained/ppo_LunarLander_bound_per23_v2")
-
+    model = PPO.load(modelname)
     obs = env.reset()
     i = 0
     rewards = 0
     all_reward = []
+    vels = []
+    vel = 0
+    j = 0
 
-
+    print("testing:", modelname)
     while i < 100:
-        perturbations = np.random.uniform(-0.23, 0.23, obs.shape)
+        
+        perturbations = np.random.uniform(-eps/100.0, eps/100.0, obs.shape)
         perturbations[0][6:] = 0
         obs += perturbations
+
         action, _states = model.predict(obs)
         obs, reward, dones, info = env.step(action)
+
+        if obs[0][6] != 1 and obs[0][7] != 1:
+            j += 1
+            vel += np.sqrt((obs[0][2])**2 + (obs[0][3])**2)
         rewards += reward[0]
+
         if(dones):
             i += 1
+            vel /= j
             print("Run:", i)
-            print(rewards)
+            print("Reward:", rewards)
+            print("Average Speed:", vel)
             all_reward.append(rewards)
+            vels.append(vel)
             rewards = 0
+            j = 0
+            vel = 0
         env.render()
-    with open('reward/reward_per_bou_23_v2.pkl', 'wb') as f:
+    with open(rewardname + '.pkl', 'wb') as f:
         pickle.dump(all_reward, f)
+    with open(speedname + '.pkl', 'wb') as f:
+        pickle.dump(vels, f)
