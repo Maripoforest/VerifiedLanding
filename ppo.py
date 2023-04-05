@@ -32,6 +32,8 @@ class CustomNetwork(nn.Module):
         last_layer_dim_pi: int = 64,
         last_layer_dim_vf: int = 64,
         last_layer_dim_co: int = 64,
+        epsilon: float = 0.1,
+        bound: int = 0
     ):
         super().__init__()
         # IMPORTANT:
@@ -65,7 +67,8 @@ class CustomNetwork(nn.Module):
             nn.Linear(last_layer_dim_co, last_layer_dim_co), 
             nn.ReLU(),
         )
-        self.epsilon = 0.18
+        self.epsilon = epsilon
+        self.bound = bound
 
     def forward(self, features: th.Tensor) -> Tuple[th.Tensor, th.Tensor, th.Tensor]:
         """
@@ -87,13 +90,14 @@ class CustomNetwork(nn.Module):
 
     def forward_critic(self, features: th.Tensor) -> th.Tensor:
         
-        # perturbations = (th.rand_like(features) - 0.5) * 2 * self.epsilon
-        # perturbations[:][6:] = 0
-        # perturbations += features
-        # return self.value_net(perturbations)
-    
-        l, u =  self.compute_bounds(features)
-        return l
+        if not self.bound:
+            perturbations = (th.rand_like(features) - 0.5) * 2 * self.epsilon
+            perturbations[:][6:] = 0
+            perturbations += features
+            return self.value_net(perturbations)
+        else:
+            l, u =  self.compute_bounds(features)
+            return l
 
         # return self.value_net(features)
         
@@ -139,16 +143,15 @@ class CustomNetwork(nn.Module):
 
 class CustomActorCriticPolicy(ActorCriticPolicy):
     def __init__(
-        self,
+        self,    
         observation_space: gym.spaces.Space,
         action_space: gym.spaces.Space,
         lr_schedule: Callable[[float], float],
         net_arch: Optional[List[Union[int, Dict[str, List[int]]]]] = None,
-        activation_fn: Type[nn.Module] = nn.ReLU,
-        *args,
+        activation_fn: Type[nn.Module] = nn.ReLU,    
+        *args, 
         **kwargs,
     ):
-
         super(CustomActorCriticPolicy, self).__init__(
             observation_space,
             action_space,
@@ -161,17 +164,37 @@ class CustomActorCriticPolicy(ActorCriticPolicy):
         )
         # Disable orthogonal initialization
         self.ortho_init = False
+        
 
     def _build_mlp_extractor(self) -> None:
-        self.mlp_extractor = CustomNetwork(self.features_dim)
+        self.mlp_extractor = CustomNetwork(feature_dim=self.features_dim, epsilon=eps, bound=is_bound)
 
-
+def generate_modelname(eps, is_bound, extra_info):
+    modelname = "ppo_LunarLander_"
+    if is_bound:
+        modelname += "bound_"
+    else:
+        modelname += "nobound_"
+    if eps == 0:
+        modelname += "noper"
+    else:
+        modelname += "per"
+        modelname += str(int(eps*100))
+    modelname += extra_info
+    return modelname
 
 if __name__ == "__main__":
+    
+    global eps, is_bound
+    eps = 0.08
+    is_bound = 1
+    extra_info = ""
 
     env = make_vec_env("LunarLander-v2", n_envs=1)
     model = PPO(CustomActorCriticPolicy, env, verbose=1,tensorboard_log="./tsb/ppo_LunarLander_tensorboard/")
 
+    modelname = generate_modelname(eps=eps, is_bound=is_bound, extra_info=extra_info)
+    print(modelname)
 
     for i in range(100):
         model.learn(
@@ -179,5 +202,5 @@ if __name__ == "__main__":
             tb_log_name="nobound",
             reset_num_timesteps=False
             )
-        model.save("ppo_LunarLander_nobound_per18_timestep"+str(i*30000))
+        model.save(modelname + "_timestep" + str(i*30000))
     del model # remove to demonstrate saving and loading
