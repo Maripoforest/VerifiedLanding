@@ -87,13 +87,13 @@ class CustomNetwork(nn.Module):
 
     def forward_critic(self, features: th.Tensor) -> th.Tensor:
         
-        perturbations = (th.rand_like(features) - 0.5) * 2 * self.epsilon
-        perturbations[:][6:] = 0
-        perturbations += features
-        return self.value_net(perturbations)
+        # perturbations = (th.rand_like(features) - 0.5) * 2 * self.epsilon
+        # perturbations[:][6:] = 0
+        # perturbations += features
+        # return self.value_net(perturbations)
     
-        # l, u =  self.compute_bounds(features)
-        # return l
+        l, u =  self.compute_bounds(features)
+        return l
 
         # return self.value_net(features)
         

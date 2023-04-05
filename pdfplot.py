@@ -17,24 +17,22 @@ import pickle
 #     reward_per_bou_1 = pickle.load(file)
 # with open('reward/reward_no_per.pkl', 'rb') as file:
 #     reward_no_per = pickle.load(file)
-
 # with open('reward/reward_per_bou_16.pkl', 'rb') as file:
 #     reward_per_bou_16 = pickle.load(file)
 # with open('reward/reward_per_nobou_16.pkl', 'rb') as file:
 #     reward_per_nobou_16 = pickle.load(file)
-
-with open('reward/reward_per_bou_14.pkl', 'rb') as file:
-    reward_per_bou_14 = pickle.load(file)
-with open('reward/reward_per_nobou_14.pkl', 'rb') as file:
-    reward_per_nobou_14 = pickle.load(file)
-
+# with open('reward/reward_per_bou_14.pkl', 'rb') as file:
+#     reward_per_bou_14 = pickle.load(file)
+# with open('reward/reward_per_nobou_14.pkl', 'rb') as file:
+#     reward_per_nobou_14 = pickle.load(file)
+with open('reward/reward_per_bou_18.pkl', 'rb') as file:
+    reward_per_bou_18 = pickle.load(file)
 # data = np.sort(data)
 # plt.plot(data)
 
-
-sns.kdeplot(reward_per_bou_14, label = 'bound_0.14')
-sns.kdeplot(reward_per_nobou_14, label = 'no_bound_0.14', color='r', linestyle = "--")
-
+sns.kdeplot(reward_per_bou_18, label = 'bound_0.18')
+# sns.kdeplot(reward_per_bou_14, label = 'bound_0.14')
+# sns.kdeplot(reward_per_nobou_14, label = 'no_bound_0.14', color='r', linestyle = "--")
 # sns.kdeplot(reward_per_bou_16, label = 'bound_0.16')
 # sns.kdeplot(reward_per_nobou_16, label = 'no_bound_0.16', color='r', linestyle = "--")
 # sns.kdeplot(reward_per_nobou_2, label = 'no_bound_0.2')
