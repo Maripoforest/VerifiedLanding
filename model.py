@@ -68,18 +68,21 @@ class CustomBoundedNetwork(nn.Module):
             self.forward_critic = self.forward_critic_unbounded
         self.epsilon = epsilon
     
-    def forward_critic_unbounded(self, features: th.Tensor) -> th.Tensor:
+    def forward_critic_unbounded(self, features: th.Tensor, is_lower: bool = True) -> th.Tensor:
         return self.value_net(features)
     
-    def forward_critic_bounded(self, features: th.Tensor) -> th.Tensor:
-        l, u = self.compute_bounds(features, self.value_net)
+    def forward_critic_bounded(self, features: th.Tensor, is_lower: bool = True) -> th.Tensor:
+        if is_lower:
+            l, u = self.compute_bounds(features, self.value_net)
+        else:
+            l = self.value_net(features)
         return l
     
     def forward_actor(self, features : th.Tensor) -> th.Tensor:
         return self.policy_net(features)
     
-    def forward(self, features : th.Tensor) -> Tuple[th.Tensor, th.Tensor]:
-        return self.forward_actor(features), self.forward_critic(features)
+    def forward(self, features : th.Tensor, is_lower: bool = True) -> Tuple[th.Tensor, th.Tensor]:
+        return self.forward_actor(features), self.forward_critic(features, is_lower=is_lower)
 
     def compute_bounds(self, features: th.Tensor, network: nn.Sequential) -> Tuple[th.Tensor, th.Tensor]:
         l = th.full_like(features, -self.epsilon).to(self.device)

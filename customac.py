@@ -1,6 +1,10 @@
+from typing import Callable, Dict, List, Optional, Tuple, Type, Union, TypeVar, Generator
+
+
 import numpy as np
 from functools import partial
 from torch import nn
+import torch as th
 
 from stable_baselines3.common.policies import ActorCriticPolicy
 from model import CustomBoundedNetwork
@@ -78,3 +82,29 @@ class CustomAC(ActorCriticPolicy):
 
         # Setup optimizer with initial learning rate
         self.optimizer = self.optimizer_class(self.parameters(), lr=lr_schedule(1), **self.optimizer_kwargs)
+
+    def evaluate_actions(self, obs: th.Tensor, noper_obs: th.Tensor, actions: th.Tensor, is_lower: bool = True) -> Tuple[th.Tensor, th.Tensor, Optional[th.Tensor]]:
+        """
+        Evaluate actions according to the current policy,
+        given the observations.
+
+        :param obs: Observation
+        :param actions: Actions
+        :return: estimated value, log likelihood of taking those actions
+            and entropy of the action distribution.
+        """
+        # Preprocess the observation if needed
+        features = self.extract_features(obs)
+        vf_features = self.extract_features(noper_obs)
+        if self.share_features_extractor:
+            latent_pi = self.mlp_extractor.forward_actor(features)
+            latent_vf = self.mlp_extractor.forward_critic(vf_features, is_lower=is_lower)
+        else:
+            # pi_features, vf_features = features
+            latent_pi = self.mlp_extractor.forward_actor(features)
+            latent_vf = self.mlp_extractor.forward_critic(vf_features, is_lower=lower)
+        distribution = self._get_action_dist_from_latent(latent_pi)
+        log_prob = distribution.log_prob(actions)
+        values = self.value_net(latent_vf)
+        entropy = distribution.entropy()
+        return values, log_prob, entropy

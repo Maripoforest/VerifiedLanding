@@ -3,6 +3,9 @@ from customac import CustomAC
 
 import torch as th
 import argparse
+
+from stable_baselines3.common.policies import ActorCriticPolicy
+from stable_baselines3 import PPO
 from stable_baselines3.common.env_util import make_vec_env
 from tqdm import tqdm
 import numpy as np
@@ -32,7 +35,8 @@ if __name__ == '__main__':
     print(name)
 
     env = make_vec_env(args.env_name, n_envs=1)
-    model = CustomPPO(CustomAC, env, verbose=1, tensorboard_log="./tsb/")
+    model = CustomPPO(CustomAC, env, verbose=1, tensorboard_log="./tsb/", batch_size=512)
+    # model = PPO(ActorCriticPolicy, env, verbose=1, tensorboard_log="./tsb/")
     model.init_bounds(args)
     model.check_status()
 
@@ -44,5 +48,5 @@ if __name__ == '__main__':
             tb_log_name=name,
             reset_num_timesteps=False        
             )
-        model.save("./saves/training/" + name + "ts" + str(i*args.per_iter_step))
+        model.save("./saves/training/" + name + "-ts-" + str(i*args.per_iter_step))
     del model
