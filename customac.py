@@ -83,7 +83,7 @@ class CustomAC(ActorCriticPolicy):
         # Setup optimizer with initial learning rate
         self.optimizer = self.optimizer_class(self.parameters(), lr=lr_schedule(1), **self.optimizer_kwargs)
 
-    def evaluate_actions(self, obs: th.Tensor, noper_obs: th.Tensor, actions: th.Tensor, is_lower: bool = True) -> Tuple[th.Tensor, th.Tensor, Optional[th.Tensor]]:
+    def evaluate_actions(self, obs: th.Tensor, noper_obs: th.Tensor, actions: th.Tensor, bound: bool, is_lower: bool = True) -> Tuple[th.Tensor, th.Tensor, Optional[th.Tensor]]:
         """
         Evaluate actions according to the current policy,
         given the observations.
@@ -95,16 +95,43 @@ class CustomAC(ActorCriticPolicy):
         """
         # Preprocess the observation if needed
         features = self.extract_features(obs)
-        vf_features = self.extract_features(noper_obs)
+        noper_features = self.extract_features(noper_obs)
         if self.share_features_extractor:
             latent_pi = self.mlp_extractor.forward_actor(features)
-            latent_vf = self.mlp_extractor.forward_critic(vf_features, is_lower=is_lower)
+            if bound == 0:
+                latent_vf = self.mlp_extractor.forward_critic(features, is_lower=is_lower)
+            else:
+                latent_vf = self.mlp_extractor.forward_critic(noper_features, is_lower=is_lower)
         else:
-            # pi_features, vf_features = features
-            latent_pi = self.mlp_extractor.forward_actor(features)
-            latent_vf = self.mlp_extractor.forward_critic(vf_features, is_lower=is_lower)
+            pi_features, vf_features = features
+            noper_pi, noper_vf = features
+            latent_pi = self.mlp_extractor.forward_actor(pi_features)
+            if bound == 0:
+                latent_vf = self.mlp_extractor.forward_critic(vf_features, is_lower=is_lower)
+            else:
+                latent_vf = self.mlp_extractor.forward_critic(noper_vf, is_lower=is_lower)
+
         distribution = self._get_action_dist_from_latent(latent_pi)
         log_prob = distribution.log_prob(actions)
         values = self.value_net(latent_vf)
         entropy = distribution.entropy()
         return values, log_prob, entropy
+    
+    def compute_bounded_value(self, obs: th.Tensor, deterministic: bool = False) -> th.Tensor:
+        """
+        Forward pass in all the networks (actor and critic)
+
+        :param obs: Obs without perturbation
+        :param deterministic: Whether to sample or use deterministic actions
+        :return: action, value and log probability of the action
+        """
+        # Preprocess the observation if needed
+        features = self.extract_features(obs)
+        if self.share_features_extractor:
+            latent_pi, latent_vf = self.mlp_extractor(features)
+        else:
+            pi_features, vf_features = features
+            latent_vf = self.mlp_extractor.forward_critic(vf_features)
+        # Evaluate the values for the given observations
+        values = self.value_net(latent_vf)
+        return  values
