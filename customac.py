@@ -102,7 +102,7 @@ class CustomAC(ActorCriticPolicy):
         else:
             # pi_features, vf_features = features
             latent_pi = self.mlp_extractor.forward_actor(features)
-            latent_vf = self.mlp_extractor.forward_critic(vf_features, is_lower=lower)
+            latent_vf = self.mlp_extractor.forward_critic(vf_features, is_lower=is_lower)
         distribution = self._get_action_dist_from_latent(latent_pi)
         log_prob = distribution.log_prob(actions)
         values = self.value_net(latent_vf)
