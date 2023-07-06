@@ -83,39 +83,42 @@ class CustomAC(ActorCriticPolicy):
         # Setup optimizer with initial learning rate
         self.optimizer = self.optimizer_class(self.parameters(), lr=lr_schedule(1), **self.optimizer_kwargs)
 
-    def evaluate_actions(self, obs: th.Tensor, noper_obs: th.Tensor, actions: th.Tensor, bound: bool, is_lower: bool = True) -> Tuple[th.Tensor, th.Tensor, Optional[th.Tensor]]:
-        """
-        Evaluate actions according to the current policy,
-        given the observations.
+    # def evaluate_actions(self, obs: th.Tensor, actions: th.Tensor, noper_obs: th.Tensor = None, bound: bool = 0, is_lower: bool = True) -> Tuple[th.Tensor, th.Tensor, Optional[th.Tensor]]:
+    #     """
+    #     Evaluate actions according to the current policy,
+    #     given the observations.
 
-        :param obs: Observation
-        :param actions: Actions
-        :return: estimated value, log likelihood of taking those actions
-            and entropy of the action distribution.
-        """
-        # Preprocess the observation if needed
-        features = self.extract_features(obs)
-        noper_features = self.extract_features(noper_obs)
-        if self.share_features_extractor:
-            latent_pi = self.mlp_extractor.forward_actor(features)
-            if bound == 0:
-                latent_vf = self.mlp_extractor.forward_critic(features, is_lower=is_lower)
-            else:
-                latent_vf = self.mlp_extractor.forward_critic(noper_features, is_lower=is_lower)
-        else:
-            pi_features, vf_features = features
-            noper_pi, noper_vf = features
-            latent_pi = self.mlp_extractor.forward_actor(pi_features)
-            if bound == 0:
-                latent_vf = self.mlp_extractor.forward_critic(vf_features, is_lower=is_lower)
-            else:
-                latent_vf = self.mlp_extractor.forward_critic(noper_vf, is_lower=is_lower)
+    #     :param obs: Observation
+    #     :param actions: Actions
+    #     :return: estimated value, log likelihood of taking those actions
+    #         and entropy of the action distribution.
+    #     """
+    #     # Preprocess the observation if needed
+    #     if noper_obs == None:
+    #         noper_obs = obs.clone()
 
-        distribution = self._get_action_dist_from_latent(latent_pi)
-        log_prob = distribution.log_prob(actions)
-        values = self.value_net(latent_vf)
-        entropy = distribution.entropy()
-        return values, log_prob, entropy
+    #     features = self.extract_features(obs)
+    #     noper_features = self.extract_features(noper_obs)
+    #     if self.share_features_extractor:
+    #         latent_pi = self.mlp_extractor.forward_actor(features)
+    #         if bound == 0:
+    #             latent_vf = self.mlp_extractor.forward_critic(features, is_lower=is_lower)
+    #         else:
+    #             latent_vf = self.mlp_extractor.forward_critic(noper_features, is_lower=is_lower)
+    #     else:
+    #         pi_features, vf_features = features
+    #         noper_pi, noper_vf = features
+    #         latent_pi = self.mlp_extractor.forward_actor(pi_features)
+    #         if bound == 0:
+    #             latent_vf = self.mlp_extractor.forward_critic(vf_features, is_lower=is_lower)
+    #         else:
+    #             latent_vf = self.mlp_extractor.forward_critic(noper_vf, is_lower=is_lower)
+
+    #     distribution = self._get_action_dist_from_latent(latent_pi)
+    #     log_prob = distribution.log_prob(actions)
+    #     values = self.value_net(latent_vf)
+    #     entropy = distribution.entropy()
+    #     return values, log_prob, entropy
     
     def compute_bounded_value(self, obs: th.Tensor, deterministic: bool = False) -> th.Tensor:
         """

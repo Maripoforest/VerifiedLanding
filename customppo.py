@@ -28,6 +28,7 @@ import wandb
 
 # SelfBaseModel = TypeVar("SelfBaseModel", bound="BaseModel")
 SelfOnPolicyAlgorithm = TypeVar("SelfOnPolicyAlgorithm", bound="OnPolicyAlgorithm")
+
 class RolloutBufferSamples(NamedTuple):
     observations: th.Tensor
     noper_obs: th.Tensor
@@ -261,15 +262,8 @@ class CustomOPA(OnPolicyAlgorithm):
                 # Convert to pytorch tensor or to TensorDict
                 obs_tensor = obs_as_tensor(self._last_obs, self.device)
                 noper_obs = obs_tensor.clone().cpu().numpy()
-                if self.epsilon != 0:
-                    perturbations = np.random.choice([-1., 1.], size=self._last_obs.shape) * self.epsilon
-                    per_tensor = obs_as_tensor(perturbations, self.device)
-                    obs_tensor += per_tensor
-                actions, _v, log_probs = self.policy(obs_tensor)
-                if self.bound:
-                    values = self.policy.compute_bounded_value(noper_obs)
-                else:
-                    values = _v
+                actions, values, log_probs = self.policy(obs_tensor)
+                
             actions = actions.cpu().numpy()
 
             # Rescale and perform action
@@ -329,6 +323,7 @@ class CustomPPO(PPO, CustomOPA):
         self.use_wandb = True if args.use_wandb==1 else False
         self.epsilon = args.epsilon
         self.bound = args.bound
+        print(args)
         if self.use_wandb:
             wandb.init(
                 project="ppo",
@@ -368,11 +363,13 @@ class CustomPPO(PPO, CustomOPA):
                 # Re-sample the noise matrix because the log_std has changed
                 if self.use_sde:
                     self.policy.reset_noise(self.batch_size)
-                values, log_prob, entropy = self.policy.evaluate_actions(obs=rollout_data.observations, 
-                                                                         noper_obs=rollout_data.noper_obs, 
-                                                                         actions=actions,
-                                                                         bound = self.bound, 
-                                                                         is_lower=False)
+                # values, log_prob, entropy = self.policy.evaluate_actions(obs=rollout_data.observations, 
+                #                                                          noper_obs=rollout_data.noper_obs, 
+                #                                                          actions=actions,
+                #                                                          bound = self.bound, 
+                #                                                          is_lower=False)
+                values, log_prob, entropy = self.policy.evaluate_actions(obs=rollout_data.observations,
+                                                                         actions=actions)
                 values = values.flatten()
                 # Normalize advantage
                 advantages = rollout_data.advantages

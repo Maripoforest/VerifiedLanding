@@ -56,8 +56,9 @@ class CustomBoundedNetwork(nn.Module):
         else:
             self.device = 'cpu'
             print("Using CPU")
-        for param in self.value_net.parameters():
-            th.nn.init.zeros_(param)
+
+        # for param in self.value_net.parameters():
+        #     th.nn.init.zeros_(param)
 
     def build_forward(self, bound, epsilon) -> None:
         if bound == 1:
