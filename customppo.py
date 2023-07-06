@@ -6,10 +6,11 @@ import torch as th
 from torch.nn import functional as F
 import numpy as np
 
-from gym import spaces
+from gymnasium import spaces
 from stable_baselines3 import PPO
 from stable_baselines3.common.on_policy_algorithm import OnPolicyAlgorithm
 from stable_baselines3.common.type_aliases import GymEnv, MaybeCallback, Schedule
+from stable_baselines3.common.policies import ActorCriticCnnPolicy, ActorCriticPolicy, BasePolicy, MultiInputActorCriticPolicy
 from stable_baselines3.common.utils import obs_as_tensor, safe_mean
 from stable_baselines3.common.utils import explained_variance, get_schedule_fn
 
@@ -17,6 +18,8 @@ import wandb
 
 # SelfBaseModel = TypeVar("SelfBaseModel", bound="BaseModel")
 SelfOnPolicyAlgorithm = TypeVar("SelfOnPolicyAlgorithm", bound="OnPolicyAlgorithm")
+SelfPPO = TypeVar("SelfPPO", bound="PPO")
+
 
 class CustomOPA(OnPolicyAlgorithm):
     def check_status(self):
@@ -88,7 +91,7 @@ class CustomPPO(PPO, CustomOPA):
                 entity="maripoforest",
                 name=args.name
             )
-
+    
     def train(self) -> None:
         """
         Update policy using the currently gathered rollout buffer.
@@ -98,10 +101,10 @@ class CustomPPO(PPO, CustomOPA):
         # Update optimizer learning rate
         self._update_learning_rate(self.policy.optimizer)
         # Compute current clip range
-        clip_range = self.clip_range(self._current_progress_remaining)
+        clip_range = self.clip_range(self._current_progress_remaining)  # type: ignore[operator]
         # Optional: clip range for the value function
         if self.clip_range_vf is not None:
-            clip_range_vf = self.clip_range_vf(self._current_progress_remaining)
+            clip_range_vf = self.clip_range_vf(self._current_progress_remaining)  # type: ignore[operator]
 
         entropy_losses = []
         pg_losses, value_losses = [], []
@@ -195,12 +198,6 @@ class CustomPPO(PPO, CustomOPA):
 
         explained_var = explained_variance(self.rollout_buffer.values.flatten(), self.rollout_buffer.returns.flatten())
 
-        # Wandb
-        wandb.log({
-                "value_loss": np.mean(value_losses),
-                "policy_gradient_loss": np.mean(pg_losses)
-                })
-        
         # Logs
         self.logger.record("train/entropy_loss", np.mean(entropy_losses))
         self.logger.record("train/policy_gradient_loss", np.mean(pg_losses))
@@ -217,3 +214,8 @@ class CustomPPO(PPO, CustomOPA):
         if self.clip_range_vf is not None:
             self.logger.record("train/clip_range_vf", clip_range_vf)
 
+        # # Wandb
+        # wandb.log({
+        #         "value_loss": np.mean(value_losses),
+        #         "policy_gradient_loss": np.mean(pg_losses)
+        #         })
