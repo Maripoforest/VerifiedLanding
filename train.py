@@ -4,12 +4,15 @@ from customac import CustomAC
 import torch as th
 import argparse
 from stable_baselines3.common.env_util import make_vec_env
+from stable_baselines3.common.policies import ActorCriticPolicy
+from stable_baselines3 import PPO
+
 from tqdm import tqdm
-import numpy as np
+import time
 
 def make_name(args):
     bound = True if args.bound==1 else False
-    return str(args.env_name) + '-' + str(args.epsilon) + '-' +str(bound)
+    return str(args.env_name) + '-' + str(args.epsilon) + '-' + str(bound) + '-' + str(int(time.time()))
 
 if __name__ == '__main__':
 
@@ -32,9 +35,14 @@ if __name__ == '__main__':
     print(name)
 
     env = make_vec_env(args.env_name, n_envs=1)
+
+    # Bounded Training
     model = CustomPPO(CustomAC, env, verbose=1, tensorboard_log="./tsb/")
     model.init_bounds(args)
     model.check_status()
+
+    # Normal Training
+    # model = PPO(CustomAC, env, verbose=1, tensorboard_log="./tsb/")
 
     env.reset()
     pbar = tqdm(iterable=range(args.iter_num))
@@ -44,5 +52,5 @@ if __name__ == '__main__':
             tb_log_name=name,
             reset_num_timesteps=False        
             )
-        model.save("./saves/training" + name + "ts" + str(i*args.per_iter_step))
+        model.save("./saves/training/" + name + "-ts-" + str(i*args.per_iter_step))
     del model
