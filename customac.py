@@ -1,6 +1,8 @@
 import numpy as np
 from functools import partial
 from torch import nn
+import torch as th
+import torch.functional as F
 
 from stable_baselines3.common.policies import ActorCriticPolicy
 from model import CustomBoundedNetwork
@@ -78,3 +80,13 @@ class CustomAC(ActorCriticPolicy):
 
         # Setup optimizer with initial learning rate
         self.optimizer = self.optimizer_class(self.parameters(), lr=lr_schedule(1), **self.optimizer_kwargs)
+    
+    def predict_values(self, obs: th.Tensor, bounded: bool = False) -> th.Tensor:
+        # features = super().extract_features(obs, self.vf_features_extractor)
+        # TODO: fix the feature extractor above
+        features = self.extract_features(obs)
+        if bounded:
+            latent_vf = self.mlp_extractor.forward_critic_bounded(features)
+        else:
+            latent_vf = self.mlp_extractor.forward_critic_unbounded(features)
+        return self.value_net(latent_vf)

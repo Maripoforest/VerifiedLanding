@@ -19,7 +19,7 @@ def main(args):
     vec_env = make_vec_env(args.env_name, n_envs=1)
 
     if args.modelpath == None:
-        args.modelpath = "./saves/training/LunarLander-v2-0.0-False-1689122831ts3920000"
+        args.modelpath = "./saves/training/LunarLander-v2-0.1-True-1689218583-ts-2880000"
     
     model = PPO.load(args.modelpath)
 
@@ -39,12 +39,12 @@ def main(args):
     for i in range(iter):
         total_reward = 0
         while not dones:
-            if args.epsilon != 0:
-                
-                
+
+            # Critic Attack
+            # =====================================================================
+            if args.epsilon != 0:           
                 noise = np.random.uniform(-step_eps, step_eps, size=obs.shape)
                 states = th.tensor(obs + noise).to('cuda')
-
                 with th.enable_grad():
                     for i in range(args.steps):
                         states = states.clone().detach().requires_grad_()
@@ -54,6 +54,7 @@ def main(args):
                         states.data = th.min(th.max(states.data - update, clamp_min), clamp_max)
                     model.policy.mlp_extractor.value_net.zero_grad()
                 obs = states.detach().cpu().numpy()
+            # =====================================================================
             
             action, _states = model.predict(obs, deterministic=True)
             obs, rewards, dones, info = vec_env.step(action)
