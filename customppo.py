@@ -468,3 +468,9 @@ class CustomPPO(PPO, CustomOPA):
         if self.clip_range_vf is not None:
             self.logger.record("train/clip_range_vf", clip_range_vf)
 
+        # Wandb
+        if self.use_wandb:
+            wandb.log({
+                    "value_loss": np.mean(value_losses),
+                    "policy_gradient_loss": np.mean(pg_losses)
+                    })

@@ -9,6 +9,7 @@ from stable_baselines3 import PPO
 
 from tqdm import tqdm
 import time
+import numpy as np
 
 def make_name(args):
     bound = True if args.bound==1 else False
@@ -52,5 +53,5 @@ if __name__ == '__main__':
             tb_log_name=name,
             reset_num_timesteps=False        
             )
-        model.save("./saves/training/" + name + "-ts-" + str(i*args.per_iter_step))
+        model.save("./saves/training/" + name + "ts" + str(i*args.per_iter_step))
     del model
